@@ -1,8 +1,8 @@
 // 环境变量优先，没有则使用代码里填写的
 const DEFAULT_CONFIG = {
   ARGO_DOMAIN: 'databricks.argo.dmain.com',                          // (必填)填写自己的隧道域名
-  DATABRICKS_HOST: 'https://abc-1223456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
-  DATABRICKS_TOKEN: 'dapi6dae4632d66931ecdeefe8808f12678dse',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
+  DATABRICKS_HOST: 'https://abc-13456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
+  DATABRICKS_TOKEN: 'dapi6dae2d66931ecdeefe8808f12678dse',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
   CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量CHAT_ID,须同时填写BOT_TOKEN(可选配置)
   BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写CHAT_ID
 };
@@ -14,7 +14,7 @@ function getConfig(env) {
   const chatId = env.CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
   const botToken = env.BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
   const argoDomain = env.ARGO_DOMAIN || DEFAULT_CONFIG.ARGO_DOMAIN;
-  
+
   return {
     DATABRICKS_HOST: host,
     DATABRICKS_TOKEN: token,
@@ -43,10 +43,10 @@ async function checkArgoDomain(argoDomain) {
         'User-Agent': 'Databricks-Monitor/1.0'
       }
     });
-    
+
     const statusCode = response.status;
     console.log(`ARGO域名 ${argoDomain} 状态码: ${statusCode}`);
-    
+
     return {
       online: statusCode === 404,
       statusCode: statusCode,
@@ -66,23 +66,23 @@ async function checkArgoDomain(argoDomain) {
 // 检查 ARGO 状态是否有变化
 function hasArgoStatusChanged(newStatus) {
   if (!lastArgoStatus) return true;
-  
-  return lastArgoStatus.online !== newStatus.online || 
+
+  return lastArgoStatus.online !== newStatus.online ||
          lastArgoStatus.statusCode !== newStatus.statusCode;
 }
 
 // 发送 Telegram 通知
 async function sendTelegramNotification(config, message) {
   const { CHAT_ID, BOT_TOKEN } = config;
-  
+
   if (!CHAT_ID || !BOT_TOKEN) {
     console.log('Telegram 通知未配置，跳过发送');
     return false;
   }
-  
+
   try {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -94,9 +94,9 @@ async function sendTelegramNotification(config, message) {
         parse_mode: 'HTML'
       }),
     });
-    
+
     const result = await response.json();
-    
+
     if (result.ok) {
       console.log('Telegram 通知发送成功');
       return true;
@@ -117,7 +117,7 @@ async function sendArgoOfflineNotification(config, argoStatus) {
                  `📊 状态码: <code>${argoStatus.statusCode || '连接失败'}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `🔍 正在检查 Databricks App 状态...`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -128,7 +128,7 @@ async function sendArgoRecoveryNotification(config) {
                  `📊 状态: <code>404 (正常)</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `🎉 节点已恢复正常`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -140,7 +140,7 @@ async function sendOfflineNotification(config, appName, appId) {
                  `🌐 ARGO: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `⚡ 系统正在尝试自动重启...`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -152,7 +152,7 @@ async function sendStartSuccessNotification(config, appName, appId) {
                  `🌐 ARGO: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `🎉 App 正在启动中,请等待argo恢复后再检查节点`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -165,7 +165,7 @@ async function sendStartFailedNotification(config, appName, appId, error) {
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n` +
                  `💥 错误: <code>${error}</code>\n\n` +
                  `🔧 请检查 App 配置或手动访问 域名/start 启动`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -174,24 +174,24 @@ async function sendManualOperationNotification(config, operation, results) {
   const successCount = results.filter(r => r.status === 'started').length;
   const failedCount = results.filter(r => r.status === 'start_failed' || r.status === 'error').length;
   const stoppedCount = results.filter(r => r.computeState === 'STOPPED').length;
-  
+
   const message = `📊 <b>Databricks Apps ${operation}</b>\n\n` +
                  `✅ 成功启动: ${successCount} 个\n` +
                  `❌ 启动失败: ${failedCount} 个\n` +
                  `⏸️ 停止状态: ${stoppedCount} 个\n` +
                  `🌐 ARGO域名: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
 // 获取 Apps 列表
 async function getAppsList(config) {
   const { DATABRICKS_HOST, DATABRICKS_TOKEN } = config;
-  
+
   let allApps = [];
   let pageToken = '';
-  
+
   do {
     let url = `${DATABRICKS_HOST}/api/2.0/apps?page_size=50`;
     if (pageToken) {
@@ -213,7 +213,7 @@ async function getAppsList(config) {
 
     const data = await response.json();
     const apps = data.apps || [];
-    
+
     allApps = allApps.concat(apps);
     pageToken = data.next_page_token || '';
   } while (pageToken);
@@ -225,7 +225,7 @@ async function getAppsList(config) {
 async function getAppsStatus(config) {
   try {
     const apps = await getAppsList(config);
-    
+
     const results = apps.map(app => ({
       name: app.name,
       id: app.id,
@@ -234,7 +234,7 @@ async function getAppsStatus(config) {
       createdAt: app.creation_timestamp,
       lastUpdated: app.last_updated_timestamp
     }));
-    
+
     const summary = {
       total: results.length,
       active: results.filter(app => app.state === 'ACTIVE').length,
@@ -242,7 +242,7 @@ async function getAppsStatus(config) {
       unknown: results.filter(app => app.state === 'UNKNOWN').length,
       other: results.filter(app => !['ACTIVE', 'STOPPED', 'UNKNOWN'].includes(app.state)).length
     };
-    
+
     return {
       summary,
       apps: results
@@ -256,22 +256,22 @@ async function getAppsStatus(config) {
 async function smartCheckAndStartApps(config) {
   console.log(`检查 ARGO 域名: ${config.ARGO_DOMAIN}`);
   const currentArgoStatus = await checkArgoDomain(config.ARGO_DOMAIN);
-  
+
   // 检查 ARGO 状态是否有变化
   const statusChanged = hasArgoStatusChanged(currentArgoStatus);
-  
+
   if (currentArgoStatus.online) {
     console.log(`✅ ARGO 域名 ${config.ARGO_DOMAIN} 状态正常 (404)`);
-    
+
     // 如果状态从离线变为在线，发送恢复通知
     if (statusChanged && lastArgoStatus && !lastArgoStatus.online) {
       console.log('ARGO 状态从离线恢复为在线，发送恢复通知');
       await sendArgoRecoveryNotification(config);
     }
-    
+
     // 更新上次状态
     lastArgoStatus = currentArgoStatus;
-    
+
     return {
       argoStatus: 'online',
       statusChanged: statusChanged,
@@ -279,29 +279,29 @@ async function smartCheckAndStartApps(config) {
       timestamp: new Date().toISOString()
     };
   }
-  
+
   console.log(`🔴 ARGO 域名 ${config.ARGO_DOMAIN} 离线，状态码: ${currentArgoStatus.statusCode}`);
-  
+
   // 如果 ARGO 状态变化为离线，发送通知并检查 Databricks
   if (statusChanged) {
     console.log('ARGO 状态变化为离线，发送通知并检查 Databricks Apps');
     await sendArgoOfflineNotification(config, currentArgoStatus);
   }
-  
+
   // ARGO 离线，检查 Databricks Apps
   const apps = await getAppsList(config);
   const results = [];
-  
+
   for (const app of apps) {
     const result = await processApp(app, config);
     results.push(result);
   }
-  
+
   console.log(`ARGO 离线检查完成，共处理 ${results.length} 个 Apps`);
-  
+
   // 更新上次状态
   lastArgoStatus = currentArgoStatus;
-  
+
   return {
     argoStatus: 'offline',
     statusChanged: statusChanged,
@@ -316,18 +316,18 @@ async function startStoppedApps(config) {
   const apps = await getAppsList(config);
   const stoppedApps = apps.filter(app => (app.compute_status?.state || 'UNKNOWN') === 'STOPPED');
   const results = [];
-  
+
   console.log(`找到 ${stoppedApps.length} 个停止的 Apps`);
-  
+
   for (const app of stoppedApps) {
     const result = await startSingleApp(app, config);
     results.push(result);
   }
-  
+
   if (stoppedApps.length > 0) {
     await sendManualOperationNotification(config, '手动启动', results);
   }
-  
+
   return results;
 }
 
@@ -336,21 +336,21 @@ async function processApp(app, config) {
   const appName = app.name;
   const appId = app.id;
   const computeState = app.compute_status?.state || 'UNKNOWN';
-  
+
   console.log(`检查 App: ${appName} (ID: ${appId}) | Compute状态: ${computeState}`);
 
   if (computeState === 'STOPPED') {
     console.log(`⚡ 启动停止的 App: ${appName}`);
-    
+
     await sendOfflineNotification(config, appName, appId);
-    
+
     return await startSingleApp(app, config);
   } else {
     console.log(`✅ App ${appName} 状态正常: ${computeState}`);
-    return { 
-      app: appName, 
-      appId: appId, 
-      status: 'healthy', 
+    return {
+      app: appName,
+      appId: appId,
+      status: 'healthy',
       computeState,
       timestamp: new Date().toISOString()
     };
@@ -362,13 +362,13 @@ async function startSingleApp(app, config) {
   const { DATABRICKS_HOST, DATABRICKS_TOKEN } = config;
   const appName = app.name;
   const appId = app.id;
-  
+
   try {
     const encodedAppName = encodeURIComponent(appName);
     const startUrl = `${DATABRICKS_HOST}/api/2.0/apps/${encodedAppName}/start`;
-    
+
     console.log(`启动 URL: ${startUrl}`);
-    
+
     const startResponse = await fetch(startUrl, {
       method: 'POST',
       headers: {
@@ -383,47 +383,47 @@ async function startSingleApp(app, config) {
 
     if (startResponse.ok) {
       console.log(`✅ App ${appName} 启动成功`);
-      
+
       await sendStartSuccessNotification(config, appName, appId);
-      
-      return { 
-        app: appName, 
-        appId: appId, 
-        status: 'started', 
+
+      return {
+        app: appName,
+        appId: appId,
+        status: 'started',
         success: true,
         timestamp: new Date().toISOString()
       };
     } else {
       console.error(`❌ App ${appName} 启动失败:`, responseText);
-      
+
       let errorDetails;
       try {
         errorDetails = JSON.parse(responseText);
       } catch {
         errorDetails = { message: responseText };
       }
-      
+
       const errorMessage = errorDetails.message || '未知错误';
-      
+
       await sendStartFailedNotification(config, appName, appId, errorMessage);
-      
-      return { 
-        app: appName, 
-        appId: appId, 
-        status: 'start_failed', 
+
+      return {
+        app: appName,
+        appId: appId,
+        status: 'start_failed',
         error: errorDetails,
         timestamp: new Date().toISOString()
       };
     }
   } catch (error) {
     console.error(`❌ App ${appName} 启动请求错误:`, error);
-    
+
     await sendStartFailedNotification(config, appName, appId, error.message);
-    
-    return { 
-      app: appName, 
-      appId: appId, 
-      status: 'error', 
+
+    return {
+      app: appName,
+      appId: appId,
+      status: 'error',
       error: error.message,
       timestamp: new Date().toISOString()
     };
@@ -484,7 +484,107 @@ function getFrontendHTML() {
         .footer-links { display: flex; justify-content: center; gap: 20px; padding: 20px; background: #2c3e50; margin-top: 30px; }
         .footer-links a { color: white; text-decoration: none; font-weight: 500; transition: color 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .footer-links a:hover { color: #4da8ff; }
-        </style>
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #ddd;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .log-info {
+            color: #0066cc;
+        }
+
+        .log-success {
+            color: #28a745;
+        }
+
+        .log-error {
+            color: #dc3545;
+        }
+
+        .log-warning {
+            color: #ffc107;
+        }
+
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -492,31 +592,32 @@ function getFrontendHTML() {
             <h1>🚀 Databricks Apps 监控面板</h1>
             <p>智能监控 - ARGO 状态优先，减少 API 调用</p>
         </div>
-        
+
         <div class="controls">
             <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新 Databricks 状态</button>
             <button class="btn btn-success" onclick="startStoppedApps()">⚡ 启动停止的 Apps</button>
             <button class="btn btn-info" onclick="checkAndStart()">🔍 智能检查</button>
             <button class="btn btn-warning" onclick="testNotification()">🔔 测试 Telegram 通知</button>
+            <button class="btn btn-warning" onclick="createOrReplaceApp()">🛠️ 创建/替换 APP</button>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
                 <span id="lastUpdated">-</span>
                 <div id="loadingIndicator" style="display: none;">加载中...</div>
             </div>
         </div>
-        
+
         <div id="messageContainer"></div>
-        
+
         <div class="stats" id="statsContainer">
             <div class="loading">加载统计数据...</div>
         </div>
-        
+
         <div class="apps-list">
             <h2 style="margin-bottom: 20px; color: #2c3e50;">Databricks Apps 状态</h2>
             <div id="appsContainer">
                 <div class="loading">加载 Apps 列表...</div>
             </div>
         </div>
-        
+
         <div class="status-panel">
             <div class="status-card" id="argoStatusCard">
                 <div class="status-title">🌐 ARGO 隧道状态</div>
@@ -539,7 +640,7 @@ function getFrontendHTML() {
                     </div>
                 </div>
             </div>
-            
+
             <div class="status-card">
                 <div class="status-title">📊 监控策略</div>
                 <div class="info-panel">
@@ -553,25 +654,27 @@ function getFrontendHTML() {
                 </div>
             </div>
         </div>
-        
+
         <div class="last-updated">
             最后更新: <span id="updateTime">-</span>
         </div>
-        
+
         <div class="routes-info">
             <h3>📚 API 路由说明</h3>
             <div class="route-item"><strong>GET /</strong> - 显示此管理界面</div>
             <div class="route-item"><strong>GET /status</strong> - 获取当前所有 Apps 的状态</div>
             <div class="route-item"><strong>GET /check</strong> - 智能检查（ARGO优先）</div>
+            <div class="route-item"><strong>GET /check-argo</strong> - 检查 ARGO 域名状态</div>
             <div class="route-item"><strong>POST /start</strong> - 手动启动所有停止的 Apps</div>
             <div class="route-item"><strong>GET /config</strong> - 查看当前配置信息</div>
             <div class="route-item"><strong>POST /test-notification</strong> - 测试 Telegram 通知</div>
+            <div class="route-item"><strong>POST /create-app</strong> - 创建/替换 APP（先删除现有APP再创建新APP）</div>
         </div>
 
         <div class="footer-links">
             <a href="https://github.com/eooce/Databricks-depoly-and-keepalive" target="_blank">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                    <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
                 GitHub
             </a>
@@ -590,28 +693,111 @@ function getFrontendHTML() {
         </div>
     </div>
 
+    <!-- 创建APP日志模态框 -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🛠️ 创建APP日志</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body" id="logContent">
+                <div class="log-entry log-info">等待开始创建APP...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeLogModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentData = null;
-        
+        let logModal = document.getElementById("logModal");
+        let logContent = document.getElementById("logContent");
+        let span = document.getElementsByClassName("close")[0];
+
         // 页面加载时获取状态
         document.addEventListener('DOMContentLoaded', function() {
             refreshStatus();
             checkArgoStatus();
         });
-        
+
+        // 关闭模态框
+        span.onclick = function() {
+            const confirmed = confirm('确定要关闭窗口吗？这将会停止APP创建过程。');
+            if (confirmed) {
+                logModal.style.display = "none";
+                // 如果有活跃的WebSocket连接，关闭它
+                if (window.appCreationSocket) {
+                    window.appCreationSocket.close();
+                    delete window.appCreationSocket;
+                }
+            }
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            if (event.target == logModal) {
+                const confirmed = confirm('确定要关闭窗口吗？这将会停止APP创建过程。');
+                if (confirmed) {
+                    logModal.style.display = "none";
+                    // 如果有活跃的WebSocket连接，关闭它
+                    if (window.appCreationSocket) {
+                        window.appCreationSocket.close();
+                        delete window.appCreationSocket;
+                    }
+                }
+            }
+        }
+
+        // 关闭日志模态框
+        function closeLogModal() {
+            const confirmed = confirm('确定要关闭窗口吗？这将会停止APP创建过程。');
+            if (confirmed) {
+                logModal.style.display = "none";
+                // 如果有活跃的WebSocket连接，关闭它
+                if (window.appCreationSocket) {
+                    window.appCreationSocket.close();
+                    delete window.appCreationSocket;
+                }
+            }
+        }
+
+        // 添加日志条目
+        function addLogEntry(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = '<span class="spinner" style="display: none;"></span>[' + timestamp + '] ' + message;
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        // 设置加载状态
+        function setLogLoading(message) {
+            const entries = logContent.getElementsByClassName('log-entry');
+            if (entries.length > 0) {
+                const lastEntry = entries[entries.length - 1];
+                const spinner = lastEntry.querySelector('.spinner');
+                if (spinner) {
+                    spinner.style.display = 'inline-block';
+                }
+                lastEntry.innerHTML = '<span class="spinner" style="display: inline-block;"></span>' + lastEntry.textContent;
+            }
+        }
+
         // 检查 ARGO 状态
         async function checkArgoStatus() {
             try {
                 const response = await fetch('/check-argo');
                 const data = await response.json();
-                
+
                 document.getElementById('argoDomain').textContent = data.argoDomain || '-';
                 document.getElementById('argoStatusCode').textContent = data.statusCode || '-';
                 document.getElementById('argoLastCheck').textContent = new Date().toLocaleString();
-                
+
                 const statusCard = document.getElementById('argoStatusCard');
                 const statusEl = document.getElementById('argoStatus');
-                
+
                 if (data.online) {
                     statusCard.className = 'status-card argo-online';
                     statusEl.innerHTML = '<span style="color: #28a745;">✅ 在线 </span>';
@@ -627,14 +813,14 @@ function getFrontendHTML() {
                 document.getElementById('argoStatus').innerHTML = '<span style="color: #dc3545;">❌ 检查失败</span>';
             }
         }
-        
+
         // 测试 Telegram 通知
         async function testNotification() {
             setLoading(true);
             try {
                 const response = await fetch('/test-notification', { method: 'POST' });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showMessage('测试通知发送成功，请检查 Telegram', 'success');
                 } else {
@@ -646,14 +832,14 @@ function getFrontendHTML() {
                 setLoading(false);
             }
         }
-        
+
         // 刷新 Databricks 状态
         async function refreshStatus() {
             setLoading(true);
             try {
                 const response = await fetch('/status');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     currentData = data;
                     updateStats(data.results);
@@ -669,16 +855,16 @@ function getFrontendHTML() {
                 setLoading(false);
             }
         }
-        
+
         // 启动停止的 Apps
         async function startStoppedApps() {
             if (!confirm('确定要启动所有停止的 Apps 吗？')) return;
-            
+
             setLoading(true);
             try {
                 const response = await fetch('/start', { method: 'POST' });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showMessage('启动操作完成', 'success');
                     setTimeout(refreshStatus, 2000);
@@ -691,24 +877,24 @@ function getFrontendHTML() {
                 setLoading(false);
             }
         }
-        
+
         // 智能检查
         async function checkAndStart() {
             setLoading(true);
             try {
                 const response = await fetch('/check');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     let message = '智能检查完成: ' + data.message;
                     if (data.argoStatus === 'offline' && data.results) {
                         message += ' (处理了 ' + data.results.length + ' 个 Apps)';
                     }
                     showMessage(message, 'success');
-                    
+
                     // 刷新 ARGO 状态
                     checkArgoStatus();
-                    
+
                     // 如果检查了 Databricks，刷新状态显示
                     if (data.results && data.results.length > 0) {
                         setTimeout(refreshStatus, 2000);
@@ -722,7 +908,92 @@ function getFrontendHTML() {
                 setLoading(false);
             }
         }
-        
+
+        // 创建或替换APP
+        async function createOrReplaceApp() {
+            if (!confirm('确定要创建新的APP吗？如果是免费用户且已有APP，将先删除现有APP再创建新APP。')) return;
+
+            // 显示日志模态框
+            logModal.style.display = "block";
+            logContent.innerHTML = '';
+            addLogEntry('正在连接到服务器...', 'info');
+
+            setLoading(true);
+
+            // 创建APP的函数，支持重启
+            async function startAppCreation() {
+                try {
+                    // 建立WebSocket连接以获取实时日志
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = wsProtocol + '//' + window.location.host + '/create-app';
+                    const socket = new WebSocket(wsUrl);
+
+                    // 保存WebSocket连接引用，以便在关闭时使用
+                    window.appCreationSocket = socket;
+
+                    socket.onopen = function(event) {
+                        addLogEntry('已连接到服务器，开始创建APP流程...', 'success');
+                    };
+
+                    socket.onmessage = function(event) {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'complete') {
+                                if (data.success) {
+                                    addLogEntry('APP创建成功完成', 'success');
+                                    showMessage('APP创建成功', 'success');
+                                } else {
+                                    addLogEntry('APP创建失败: ' + data.error, 'error');
+                                    showMessage('APP创建失败: ' + data.error, 'error');
+                                }
+                                socket.close();
+                            } else if (data.type === 'restart') {
+                                // 收到重启信号，关闭当前连接并重新开始
+                                addLogEntry(data.message, 'info');
+                                addLogEntry('正在重新连接服务器...', 'info');
+                                socket.close();
+
+                                // 等待2秒后重新开始
+                                setTimeout(() => {
+                                    startAppCreation();
+                                }, 2000);
+                            } else {
+                                addLogEntry(data.message, data.type || 'info');
+                            }
+                        } catch (e) {
+                            addLogEntry('收到未知消息: ' + event.data, 'info');
+                        }
+                    };
+
+                    socket.onerror = function(error) {
+                        addLogEntry('WebSocket连接错误: ' + error.message, 'error');
+                        showMessage('连接错误: ' + error.message, 'error');
+                    };
+
+                    socket.onclose = function(event) {
+                        if (event.wasClean) {
+                            addLogEntry('连接已关闭', 'info');
+                        } else {
+                            addLogEntry('连接意外中断', 'warning');
+                        }
+                        // 清理WebSocket连接引用
+                        if (window.appCreationSocket === socket) {
+                            delete window.appCreationSocket;
+                        }
+                        setLoading(false);
+                    };
+
+                } catch (error) {
+                    addLogEntry('建立连接时出错: ' + error.message, 'error');
+                    showMessage('请求失败: ' + error.message, 'error');
+                    setLoading(false);
+                }
+            }
+
+            // 开始创建APP
+            startAppCreation();
+        }
+
         // 显示消息
         function showMessage(message, type) {
             const container = document.getElementById('messageContainer');
@@ -732,12 +1003,12 @@ function getFrontendHTML() {
             container.appendChild(messageEl);
             setTimeout(function() { messageEl.remove(); }, 5000);
         }
-        
+
         // 显示加载状态
         function setLoading(loading) {
             const indicator = document.getElementById('loadingIndicator');
             const buttons = document.querySelectorAll('.btn');
-            
+
             if (loading) {
                 indicator.style.display = 'block';
                 buttons.forEach(function(btn) { btn.disabled = true; });
@@ -746,12 +1017,12 @@ function getFrontendHTML() {
                 buttons.forEach(function(btn) { btn.disabled = false; });
             }
         }
-        
+
         // 更新统计信息
         function updateStats(data) {
             const container = document.getElementById('statsContainer');
             const summary = data.summary;
-            
+
             container.innerHTML = [
                 '<div class="stat-card">',
                 '<div class="stat-number">' + summary.total + '</div>',
@@ -771,17 +1042,17 @@ function getFrontendHTML() {
                 '</div>'
             ].join('');
         }
-        
+
         // 更新 Apps 列表
         function updateAppsList(data) {
             const container = document.getElementById('appsContainer');
             const apps = data.apps;
-            
+
             if (apps.length === 0) {
                 container.innerHTML = '<div class="loading">没有找到任何 Apps</div>';
                 return;
             }
-            
+
             let html = [
                 '<table class="apps-table">',
                 '<thead>',
@@ -794,11 +1065,11 @@ function getFrontendHTML() {
                 '</thead>',
                 '<tbody>'
             ].join('');
-            
+
             apps.forEach(function(app) {
                 const stateClass = 'state-' + app.state.toLowerCase();
                 const createDate = app.createdAt ? new Date(app.createdAt).toLocaleString() : '未知';
-                
+
                 html += [
                     '<tr>',
                     '<td><strong>' + app.name + '</strong></td>',
@@ -812,24 +1083,554 @@ function getFrontendHTML() {
                     '</tr>'
                 ].join('');
             });
-            
+
             html += '</tbody></table>';
             container.innerHTML = html;
         }
-        
+
         // 更新最后更新时间
         function updateLastUpdated() {
             const now = new Date();
             document.getElementById('updateTime').textContent = now.toLocaleString();
             document.getElementById('lastUpdated').textContent = '最后更新: ' + now.toLocaleTimeString();
         }
-        
+
         // 每10分钟自动检查 ARGO 状态
         setInterval(checkArgoStatus, 10 * 60 * 1000);
     </script>
 </body>
 </html>`;
 }
+
+
+// 创建或替换APP的后端处理函数
+async function handleCreateOrReplaceApp(config, logStream) {
+  const { DATABRICKS_HOST, DATABRICKS_TOKEN } = config;
+  let creationAttempts = 0;
+  const maxCreationAttempts = 200;
+
+  // 心跳定时器
+  let heartbeatInterval;
+
+  // 发送日志消息的函数
+  function sendLog(message, type = 'info') {
+    if (logStream && !logStream.isClosed()) {
+      try {
+        logStream.send(JSON.stringify({ type, message }));
+      } catch (e) {
+        // 发送失败可能是因为连接已关闭
+      }
+    }
+    console.log('[' + type + '] ' + message);
+  }
+
+  // 检查是否已取消的函数
+  function isCancelled() {
+    return logStream && logStream.isClosed();
+  }
+
+  // 启动心跳机制
+  function startHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+    }
+
+    heartbeatInterval = setInterval(() => {
+      if (logStream && !logStream.isClosed()) {
+        try {
+          logStream.send(JSON.stringify({ type: 'heartbeat', message: '保持连接活跃' }));
+        } catch (e) {
+          // 发送心跳失败，可能是连接已关闭
+          clearInterval(heartbeatInterval);
+        }
+      } else {
+        clearInterval(heartbeatInterval);
+      }
+    }, 45000); // 每45秒发送一次心跳
+  }
+
+  // 停止心跳机制
+  function stopHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  try {
+    // 启动心跳机制
+    startHeartbeat();
+
+    // 先获取现有的APP列表
+    const apps = await getAppsList(config);
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 如果是免费用户且已有APP，则先删除现有APP
+    if (apps.length > 0) {
+      sendLog('检测到 ' + apps.length + ' 个现有APP，开始删除...', 'info');
+
+      // 删除所有现有APP
+      for (const app of apps) {
+        // 检查是否已取消
+        if (isCancelled()) {
+          sendLog('操作已被用户取消', 'warning');
+          throw new Error('操作已被用户取消');
+        }
+
+        const appName = app.name;
+        const encodedAppName = encodeURIComponent(appName);
+        const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
+
+        sendLog('正在删除APP: ' + appName, 'info');
+
+        const deleteResponse = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+            'Content-Type': 'application/json',
+          }
+        });
+
+        // 检查是否已取消
+        if (isCancelled()) {
+          sendLog('操作已被用户取消', 'warning');
+          throw new Error('操作已被用户取消');
+        }
+
+        if (!deleteResponse.ok) {
+          const errorText = await deleteResponse.text();
+          sendLog('删除APP ' + appName + ' 失败: ' + errorText, 'error');
+          throw new Error('删除APP ' + appName + ' 失败: ' + errorText);
+        }
+
+        sendLog('成功发送删除APP请求: ' + appName, 'success');
+      }
+
+      // 循环检查APP是否已删除，每35秒检查一次，直到删除完毕
+      sendLog('开始检查APP是否已删除...', 'info');
+      let remainingApps;
+      do {
+        // 检查是否已取消
+        if (isCancelled()) {
+          sendLog('操作已被用户取消', 'warning');
+          throw new Error('操作已被用户取消');
+        }
+
+        sendLog('等待35秒后检查APP删除状态...', 'info');
+        // 等待35秒，但也要能响应取消
+        for (let i = 0; i < 35; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+        }
+
+        remainingApps = await getAppsList(config);
+        if (remainingApps.length > 0) {
+          sendLog('仍有 ' + remainingApps.length + ' 个APP未删除，继续等待...', 'warning');
+        } else {
+          sendLog('所有APP已成功删除', 'success');
+        }
+      } while (remainingApps.length > 0 && !isCancelled());
+    }
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 创建新的APP
+    const createUrl = DATABRICKS_HOST + '/api/2.0/apps';
+    // 将APP名称改为小写"us"
+    const newAppName = "us";
+
+    // 这里使用一个简单的示例配置创建APP
+    const appConfig = {
+      name: newAppName,
+      spec: {
+        resources: {
+          cpu: 0.5,
+          memory: "1Gi"
+        },
+        serve: {
+          endpoint: {
+            name: "api",
+            type: "HTTP",
+            port: 8080,
+            route: "/",
+            timeout: "30s"
+          }
+        }
+      }
+    };
+
+    sendLog('开始尝试创建新APP: ' + newAppName, 'info');
+
+    // 循环尝试创建APP，最多尝试200次
+    while (creationAttempts < maxCreationAttempts && !isCancelled()) {
+      // 检查是否已取消
+      if (isCancelled()) {
+        sendLog('操作已被用户取消', 'warning');
+        throw new Error('操作已被用户取消');
+      }
+
+      creationAttempts++;
+      sendLog('第 ' + creationAttempts + ' 次尝试创建APP...', 'info');
+
+      // 每5次尝试后断开连接并重新开始
+      if (creationAttempts % 5 === 0) {
+        sendLog('已尝试创建APP ' + creationAttempts + ' 次，为避免请求过多，将断开连接并重新开始...', 'info');
+        // 发送重新开始信号
+        if (logStream && !logStream.isClosed()) {
+          try {
+            logStream.send(JSON.stringify({
+              type: 'restart',
+              message: '为避免请求过多，断开连接并重新开始创建流程',
+              restart: true
+            }));
+          } catch (e) {
+            // 发送失败可能是因为连接已关闭
+          }
+        }
+        // 停止心跳
+        stopHeartbeat();
+        // 返回重启信号
+        return {
+          restart: true,
+          message: '为避免请求过多，断开连接并重新开始创建流程',
+          attempts: creationAttempts
+        };
+      }
+
+      const createResponse = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(appConfig)
+      });
+
+      // 检查是否已取消
+      if (isCancelled()) {
+        sendLog('操作已被用户取消', 'warning');
+        throw new Error('操作已被用户取消');
+      }
+
+      const responseText = await createResponse.text();
+
+      if (createResponse.ok) {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP成功', 'success');
+
+        let createdApp;
+        try {
+          createdApp = JSON.parse(responseText);
+        } catch (e) {
+          sendLog("创建APP响应: " + responseText, 'info');
+          throw new Error('无法解析创建APP的响应: ' + e.message);
+        }
+
+        sendLog('成功创建APP: ' + createdApp.name, 'success');
+
+        // 检查APP状态，如果发现错误则删除并重新创建
+        sendLog('检查新创建的APP状态...', 'info');
+        let retries = 0;
+        const maxRetries = 3;
+        let appStatus = null;
+
+        do {
+          // 检查是否已取消
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+
+          try {
+            // 等待一段时间让APP初始化
+            sendLog('等待30秒后检查APP状态...', 'info');
+            // 等待30秒，但也要能响应取消
+            for (let i = 0; i < 30; i++) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              if (isCancelled()) {
+                sendLog('操作已被用户取消', 'warning');
+                throw new Error('操作已被用户取消');
+              }
+            }
+
+            // 获取APP详细信息
+            const appDetailsUrl = DATABRICKS_HOST + '/api/2.0/apps/' + newAppName;
+            const appDetailsResponse = await fetch(appDetailsUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                'Content-Type': 'application/json',
+              }
+            });
+
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            if (appDetailsResponse.ok) {
+              const appDetails = await appDetailsResponse.json();
+              appStatus = appDetails.compute_status?.state || 'UNKNOWN';
+              sendLog('APP ' + newAppName + ' 当前状态: ' + appStatus, 'info');
+
+              // 检查是否有错误状态
+              if (appStatus === 'ERROR' || appStatus === 'FAILED') {
+                sendLog('APP ' + newAppName + ' 处于错误状态，准备删除并重新创建...', 'warning');
+
+                // 删除出错的APP
+                const encodedAppName = encodeURIComponent(newAppName);
+                const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
+
+                const deleteResponse = await fetch(deleteUrl, {
+                  method: 'DELETE',
+                  headers: {
+                    'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                    'Content-Type': 'application/json',
+                  }
+                });
+
+                // 检查是否已取消
+                if (isCancelled()) {
+                  sendLog('操作已被用户取消', 'warning');
+                  throw new Error('操作已被用户取消');
+                }
+
+                if (!deleteResponse.ok) {
+                  const errorText = await deleteResponse.text();
+                  sendLog('删除出错的APP ' + newAppName + ' 失败: ' + errorText, 'error');
+                  throw new Error('删除出错的APP ' + newAppName + ' 失败: ' + errorText);
+                }
+
+                sendLog('已删除出错的APP: ' + newAppName, 'success');
+
+                // 等待删除完成
+                sendLog('等待35秒后重新创建APP...', 'info');
+                // 等待35秒，但也要能响应取消
+                for (let i = 0; i < 35; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 重新开始创建循环
+                break;
+              } else if (appStatus === 'STARTING') {
+                // 如果APP状态是STARTING，等待30秒后再次检查
+                sendLog('APP ' + newAppName + ' 正在启动中，30秒后再次检查状态...', 'info');
+
+                // 等待30秒，但也要能响应取消
+                for (let i = 0; i < 30; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 继续下一次循环检查状态
+                continue;
+              } else if (appStatus === 'ACTIVE' || appStatus === 'DEPLOYING') {
+                // APP状态正常，跳出循环
+                sendLog('APP创建完成且状态正常: ' + appStatus, 'success');
+                stopHeartbeat(); // 停止心跳
+                return {
+                  success: true,
+                  app: createdApp,
+                  message: 'APP创建成功',
+                  status: appStatus,
+                  attempts: creationAttempts
+                };
+              }
+            } else {
+              const errorText = await appDetailsResponse.text();
+              sendLog('获取APP详情失败，状态码: ' + appDetailsResponse.status + ' 错误信息: ' + errorText, 'error');
+              // 如果是请求过多错误，则等待更长时间再重试
+              if (appDetailsResponse.status === 429 || errorText.includes('Too many subrequests')) {
+                sendLog('检测到请求过多，等待60秒后重试...', 'warning');
+                for (let i = 0; i < 60; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 如果重试后仍然有请求过多错误，我们跳出当前循环，让外层循环重新开始
+                sendLog('请求过多错误持续存在，将重新开始创建流程...', 'warning');
+                break;
+              }
+            }
+          } catch (error) {
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            sendLog('检查APP状态时出错: ' + error.message, 'error');
+
+            // 如果是请求过多错误，则等待更长时间再重试
+            if (error.message.includes('Too many subrequests')) {
+              sendLog('检测到请求过多，等待60秒后重试...', 'warning');
+              for (let i = 0; i < 60; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                if (isCancelled()) {
+                  sendLog('操作已被用户取消', 'warning');
+                  throw new Error('操作已被用户取消');
+                }
+              }
+
+              // 如果重试后仍然有请求过多错误，我们跳出当前循环，让外层循环重新开始
+              sendLog('请求过多错误持续存在，将重新开始创建流程...', 'warning');
+              break;
+            }
+          }
+
+          retries++;
+        } while (retries < maxRetries && !isCancelled());
+
+        if (retries >= maxRetries) {
+          sendLog('APP状态检查达到最大重试次数，可能存在异常', 'warning');
+          // 如果达到最大重试次数，返回成功但带有警告
+          stopHeartbeat(); // 停止心跳
+          return {
+            success: true,
+            app: createdApp,
+            message: 'APP创建成功，但状态检查达到最大重试次数',
+            status: appStatus,
+            attempts: creationAttempts
+          };
+        }
+      } else if (responseText.includes("maximum number of apps")) {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP失败，仍检测到APP数量限制，继续重试...', 'warning');
+        // 等待一段时间再重试，但也要能响应取消
+        for (let i = 0; i < 35; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+        }
+      } else {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP失败: ' + responseText, 'error');
+        throw new Error('创建APP失败: ' + responseText);
+      }
+    }
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 如果达到最大尝试次数仍未成功
+    if (creationAttempts >= maxCreationAttempts) {
+      sendLog('创建APP失败，已达到最大尝试次数 ' + maxCreationAttempts, 'error');
+      throw new Error('创建APP失败，已达到最大尝试次数 ' + maxCreationAttempts);
+    }
+  } catch (error) {
+    sendLog('创建APP过程中出错: ' + error.message, 'error');
+    stopHeartbeat(); // 停止心跳
+    throw error;
+  } finally {
+    stopHeartbeat(); // 确保停止心跳
+  }
+}
+
+// 处理创建APP的WebSocket连接
+async function handleCreateAppWebSocket(request, env) {
+  const webSocketPair = new WebSocketPair();
+  const [client, server] = Object.values(webSocketPair);
+
+  // 创建一个可取消的标记
+  const abortController = new AbortController();
+
+  // 创建一个包含send方法的对象来模拟流
+  const logStream = {
+    send: (message) => {
+      try {
+        if (server.readyState === WebSocket.READY_STATE_OPEN) {
+          server.send(message);
+        }
+      } catch (e) {
+        console.error('WebSocket发送消息失败:', e);
+      }
+    },
+    isClosed: () => abortController.signal.aborted
+  };
+
+  // 监听连接关闭事件
+  server.addEventListener('close', () => {
+    console.log('WebSocket连接已关闭，触发取消信号');
+    abortController.abort();
+  });
+
+  server.addEventListener('error', () => {
+    console.log('WebSocket连接错误，触发取消信号');
+    abortController.abort();
+  });
+
+  server.accept();
+
+  // 启动APP创建过程
+  const config = getConfig(env);
+
+  // 在后台执行APP创建任务
+  (async () => {
+    try {
+      const result = await handleCreateOrReplaceApp(config, logStream);
+      if (!abortController.signal.aborted) {
+        server.send(JSON.stringify({
+          type: 'complete',
+          success: true,
+          message: 'APP创建完成',
+          result: result
+        }));
+      }
+    } catch (error) {
+      // 只有在连接未关闭且不是取消操作的情况下才发送错误信息
+      if (!abortController.signal.aborted && !error.message.includes('操作已被用户取消')) {
+        try {
+          server.send(JSON.stringify({
+            type: 'complete',
+            success: false,
+            error: error.message
+          }));
+        } catch (e) {
+          console.error('发送错误信息失败:', e);
+        }
+      }
+    } finally {
+      try {
+        if (server.readyState === WebSocket.READY_STATE_OPEN) {
+          server.close();
+        }
+      } catch (e) {
+        console.error('关闭WebSocket连接时出错:', e);
+      }
+    }
+  })();
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
+}
+
 
 // 测试通知函数
 async function testNotification(config) {
@@ -838,7 +1639,7 @@ async function testNotification(config) {
                  `🌐 ARGO域名: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `🎉 如果你的 Telegram 配置正确，你应该能收到这条消息`;
-  
+
   return await sendTelegramNotification(config, message);
 }
 
@@ -856,18 +1657,18 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
-    
+
     if (path === '/' || path === '/index.html') {
       return new Response(getFrontendHTML(), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
     }
-    
+
     if (path === '/check') {
       try {
         const config = getConfig(env);
         const result = await smartCheckAndStartApps(config);
-        
+
         return new Response(JSON.stringify({
           success: true,
           message: result.message || '检查完成',
@@ -888,7 +1689,7 @@ export default {
         });
       }
     }
-    
+
     if (path === '/check-argo') {
       try {
         const config = getConfig(env);
@@ -906,7 +1707,7 @@ export default {
         });
       }
     }
-    
+
     if (path === '/start') {
       try {
         const config = getConfig(env);
@@ -929,7 +1730,7 @@ export default {
         });
       }
     }
-    
+
     if (path === '/status') {
       try {
         const config = getConfig(env);
@@ -952,14 +1753,14 @@ export default {
         });
       }
     }
-    
+
     if (path === '/config') {
       const config = getConfig(env);
-      const maskedToken = config.DATABRICKS_TOKEN ? 
+      const maskedToken = config.DATABRICKS_TOKEN ?
         config.DATABRICKS_TOKEN.substring(0, 10) + '...' : '未设置';
-      const maskedBotToken = config.BOT_TOKEN ? 
+      const maskedBotToken = config.BOT_TOKEN ?
         config.BOT_TOKEN.substring(0, 10) + '...' : '未设置';
-      
+
       return new Response(JSON.stringify({
         DATABRICKS_HOST: config.DATABRICKS_HOST,
         DATABRICKS_TOKEN: maskedToken,
@@ -971,12 +1772,12 @@ export default {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     if (path === '/test-notification') {
       try {
         const config = getConfig(env);
         const success = await testNotification(config);
-        
+
         if (success) {
           return new Response(JSON.stringify({
             success: true,
@@ -1003,7 +1804,39 @@ export default {
         });
       }
     }
-    
+
+    // 处理创建/替换APP的请求
+    if (path === '/create-app') {
+      // 检查是否是WebSocket升级请求
+      const upgradeHeader = request.headers.get('Upgrade');
+      if (upgradeHeader === 'websocket') {
+        return handleCreateAppWebSocket(request, env);
+      }
+
+      // 保持原有的POST请求处理
+      try {
+        const config = getConfig(env);
+        const result = await handleCreateOrReplaceApp(config);
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'APP创建成功',
+          app: result.app,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     return new Response(JSON.stringify({
       error: '路由不存在',
       available_routes: [
@@ -1013,21 +1846,22 @@ export default {
         { path: '/check-argo', method: 'GET', description: '检查 ARGO 域名状态' },
         { path: '/start', method: 'POST', description: '手动启动所有停止的 Apps' },
         { path: '/config', method: 'GET', description: '查看当前配置信息' },
-        { path: '/test-notification', method: 'POST', description: '测试 Telegram 通知' }
+        { path: '/test-notification', method: 'POST', description: '测试 Telegram 通知' },
+        { path: '/create-app', method: 'POST', description: '创建/替换 APP' }
       ]
     }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' }
     });
   },
-  
+
   async scheduled(event, env, ctx) {
     console.log('开始定时智能检查...');
-    
+
     try {
       const config = getConfig(env);
       const result = await smartCheckAndStartApps(config);
-      
+
       console.log('定时检查完成:', result.message);
       if (result.statusChanged) {
         console.log('ARGO 状态发生变化，已处理');
