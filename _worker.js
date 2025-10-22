@@ -1,8 +1,8 @@
 // 环境变量优先，没有则使用代码里填写的
 const DEFAULT_CONFIG = {
   ARGO_DOMAIN: 'databricks.argo.dmain.com',                          // (必填)填写自己的隧道域名
-  DATABRICKS_HOST: 'https://abc-13456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
-  DATABRICKS_TOKEN: 'dapi6dae2d66931ecdeefe8808f12678dse',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
+  DATABRICKS_HOST: 'https://abc-1223456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
+  DATABRICKS_TOKEN: 'dapi6dae4632d66931ecdeefe8808f12678dse',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
   CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量CHAT_ID,须同时填写BOT_TOKEN(可选配置)
   BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写CHAT_ID
 };
@@ -1170,11 +1170,16 @@ async function handleCreateOrReplaceApp(config, logStream) {
       throw new Error('操作已被用户取消');
     }
 
-    // 如果是免费用户且已有APP，则先删除现有APP
-    if (apps.length > 0) {
-      sendLog('检测到 ' + apps.length + ' 个现有APP，开始删除...', 'info');
+    // 如果没有APP，直接创建新APP
+    if (apps.length === 0) {
+      sendLog('没有发现现有APP，直接创建新APP', 'info');
+    } 
+    // 如果有APP，检查APP状态，只在状态为ERROR时删除并创建APP
+    else {
+      sendLog('检测到 ' + apps.length + ' 个现有APP，开始检查APP状态...', 'info');
 
-      // 删除所有现有APP
+      // 检查每个APP的状态
+      let hasErrorApp = false;
       for (const app of apps) {
         // 检查是否已取消
         if (isCancelled()) {
@@ -1183,61 +1188,98 @@ async function handleCreateOrReplaceApp(config, logStream) {
         }
 
         const appName = app.name;
-        const encodedAppName = encodeURIComponent(appName);
-        const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
-
-        sendLog('正在删除APP: ' + appName, 'info');
-
-        const deleteResponse = await fetch(deleteUrl, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
-            'Content-Type': 'application/json',
-          }
-        });
-
-        // 检查是否已取消
-        if (isCancelled()) {
-          sendLog('操作已被用户取消', 'warning');
-          throw new Error('操作已被用户取消');
+        sendLog('正在检查APP状态: ' + appName + '，当前状态: ' + app.state, 'info');
+        
+        // 只有当APP状态为ERROR时才标记为需要删除
+        if (app.state === 'ERROR') {
+          hasErrorApp = true;
+          sendLog('发现处于ERROR状态的APP: ' + appName, 'warning');
         }
-
-        if (!deleteResponse.ok) {
-          const errorText = await deleteResponse.text();
-          sendLog('删除APP ' + appName + ' 失败: ' + errorText, 'error');
-          throw new Error('删除APP ' + appName + ' 失败: ' + errorText);
-        }
-
-        sendLog('成功发送删除APP请求: ' + appName, 'success');
       }
 
-      // 循环检查APP是否已删除，每35秒检查一次，直到删除完毕
-      sendLog('开始检查APP是否已删除...', 'info');
-      let remainingApps;
-      do {
-        // 检查是否已取消
-        if (isCancelled()) {
-          sendLog('操作已被用户取消', 'warning');
-          throw new Error('操作已被用户取消');
+      // 只有当存在ERROR状态的APP时才执行删除和创建操作
+      if (hasErrorApp) {
+        sendLog('发现处于ERROR状态的APP，开始删除...', 'info');
+
+        // 删除所有处于ERROR状态的APP
+        for (const app of apps) {
+          // 只删除处于ERROR状态的APP
+          if (app.state === 'ERROR') {
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            const appName = app.name;
+            const encodedAppName = encodeURIComponent(appName);
+            const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
+
+            sendLog('正在删除处于ERROR状态的APP: ' + appName, 'info');
+
+            const deleteResponse = await fetch(deleteUrl, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                'Content-Type': 'application/json',
+              }
+            });
+
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            if (!deleteResponse.ok) {
+              const errorText = await deleteResponse.text();
+              sendLog('删除APP ' + appName + ' 失败: ' + errorText, 'error');
+              throw new Error('删除APP ' + appName + ' 失败: ' + errorText);
+            }
+
+            sendLog('成功发送删除APP请求: ' + appName, 'success');
+          }
         }
 
-        sendLog('等待35秒后检查APP删除状态...', 'info');
-        // 等待35秒，但也要能响应取消
-        for (let i = 0; i < 35; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // 循环检查APP是否已删除，每35秒检查一次，直到删除完毕
+        sendLog('开始检查APP是否已删除...', 'info');
+        let remainingApps;
+        do {
+          // 检查是否已取消
           if (isCancelled()) {
             sendLog('操作已被用户取消', 'warning');
             throw new Error('操作已被用户取消');
           }
-        }
 
-        remainingApps = await getAppsList(config);
-        if (remainingApps.length > 0) {
-          sendLog('仍有 ' + remainingApps.length + ' 个APP未删除，继续等待...', 'warning');
-        } else {
-          sendLog('所有APP已成功删除', 'success');
-        }
-      } while (remainingApps.length > 0 && !isCancelled());
+          sendLog('等待35秒后检查APP删除状态...', 'info');
+          // 等待35秒，但也要能响应取消
+          for (let i = 0; i < 35; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+          }
+
+          remainingApps = await getAppsList(config);
+          // 只计算仍处于ERROR状态的APP
+          const errorApps = remainingApps.filter(app => app.state === 'ERROR');
+          if (errorApps.length > 0) {
+            sendLog('仍有 ' + errorApps.length + ' 个处于ERROR状态的APP未删除，继续等待...', 'warning');
+          } else {
+            sendLog('所有处于ERROR状态的APP已成功删除', 'success');
+          }
+        } while (remainingApps.some(app => app.state === 'ERROR') && !isCancelled());
+      } else {
+        // 如果没有ERROR状态的APP，直接结束流程
+        sendLog('没有发现处于ERROR状态的APP，跳过删除和创建步骤，流程结束', 'info');
+        stopHeartbeat(); // 停止心跳
+        return {
+          success: true,
+          message: '没有发现处于ERROR状态的APP，跳过删除和创建步骤',
+          attempts: 0
+        };
+      }
     }
 
     // 检查是否已取消
@@ -1284,8 +1326,8 @@ async function handleCreateOrReplaceApp(config, logStream) {
       creationAttempts++;
       sendLog('第 ' + creationAttempts + ' 次尝试创建APP...', 'info');
 
-      // 每5次尝试后断开连接并重新开始
-      if (creationAttempts % 5 === 0) {
+      // 每10次尝试后断开连接并重新开始
+      if (creationAttempts % 10 === 0) {
         sendLog('已尝试创建APP ' + creationAttempts + ' 次，为避免请求过多，将断开连接并重新开始...', 'info');
         // 发送重新开始信号
         if (logStream && !logStream.isClosed()) {
